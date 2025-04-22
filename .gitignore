@@ -1,0 +1,23 @@
+# Lua/Neovim specific
+*.so
+*.o
+*.a
+luac.out
+
+# Vim/Neovim specific
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+
+# Package managers
+.luarocks/
+
+# Development environment
+.env
+.dev/
+.vscode/
+.idea/
+.DS_Store
