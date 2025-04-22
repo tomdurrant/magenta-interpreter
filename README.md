@@ -36,20 +36,18 @@ This creates a more agent-like development assistant that can reason and act ove
 
 ```lua
 {
-  "username/magenta-interpreter",
+  "tomdurrant/magenta-interpreter",
   dependencies = {
     "magenta-nvim/magenta.nvim",
     "nvim-lua/plenary.nvim"
   },
   config = function()
     require("magenta-interpreter").setup({
-      interpreter_shell = {
-        server_url = "http://localhost:3000",  -- Open Interpreter server URL
-        auto_start = false,                    -- Auto-start Open Interpreter server?
-        approved_commands = {},                -- List of allowed command patterns (empty = all allowed)
-        timeout = 30000,                       -- Request timeout in milliseconds
-        show_command_output = true             -- Show command output in a buffer
-      }
+      server_url = "http://localhost:3000",  -- Open Interpreter server URL
+      auto_start = false,                    -- Auto-start Open Interpreter server?
+      approved_commands = {},                -- List of allowed command patterns (empty = all allowed)
+      timeout = 30000,                       -- Request timeout in milliseconds
+      show_command_output = true             -- Show command output in a buffer
     })
   end
 }
@@ -59,14 +57,18 @@ This creates a more agent-like development assistant that can reason and act ove
 
 ```lua
 use {
-  "username/magenta-interpreter",
+  "tomdurrant/magenta-interpreter",
   requires = {
     "magenta-nvim/magenta.nvim",
     "nvim-lua/plenary.nvim"
   },
   config = function()
     require("magenta-interpreter").setup({
-      -- configuration options (see above)
+      server_url = "http://localhost:3000",
+      auto_start = false,
+      approved_commands = {},
+      timeout = 30000,
+      show_command_output = true
     })
   end
 }
@@ -132,6 +134,36 @@ local is_running = require("magenta-interpreter").is_server_running()
 -- Start the Open Interpreter server manually
 require("magenta-interpreter").start_server()
 ```
+
+## Troubleshooting
+
+If you encounter issues when setting up the plugin, try these steps:
+
+1. **Run diagnostic command**: The plugin provides a built-in diagnostic tool that can help identify common issues:
+   ```vim
+   :MagentaInterpreterDebug
+   ```
+   This will check for required dependencies and proper module loading.
+
+2. **Check dependencies**: Make sure both `plenary.nvim` and `magenta.nvim` are properly installed and loaded.
+
+3. **Verify Open Interpreter**: Ensure Open Interpreter is installed and can run in server mode:
+   ```bash
+   pip install open-interpreter
+   interpreter --server
+   ```
+
+4. **Check for configuration conflicts**: If you're using other plugins that modify Magenta's behavior, there might be conflicts.
+
+5. **Debug logs**: You can enable more verbose logging by adding this to your config:
+   ```lua
+   vim.g.magenta_interpreter_debug = true
+   ```
+
+6. **Common issues**:
+   - **"Module not found"**: Ensure your plugin manager is properly loading the plugin
+   - **"Failed to connect to Open Interpreter"**: Check that the server is running on the configured port
+   - **"Failed to register with Magenta"**: This may indicate an incompatible version of magenta.nvim
 
 ## Contributing
 

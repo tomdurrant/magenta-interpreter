@@ -13,3 +13,21 @@ if vim.g.loaded_magenta_interpreter == 1 then
   return
 end
 vim.g.loaded_magenta_interpreter = 1
+
+-- This allows the plugin to be loaded without error even if something fails
+local ok, err = pcall(function()
+  -- The plugin doesn't need to do anything on initial load
+  -- The setup function will be called by the user's configuration
+  
+  -- Create a helper command to run diagnostics if there are issues
+  vim.api.nvim_create_user_command("MagentaInterpreterDebug", function()
+    local debug = require("magenta-interpreter-debug")
+    debug.run_diagnostics()
+  end, {
+    desc = "Run diagnostics for magenta-interpreter plugin"
+  })
+end)
+
+if not ok then
+  vim.notify("Error loading magenta-interpreter plugin: " .. tostring(err), vim.log.levels.ERROR)
+end
