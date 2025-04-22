@@ -48,6 +48,11 @@ end
 function M.ensure_server_running()
   if not init_modules() then return false end
   
+  if vim.g.magenta_interpreter_debug then
+    vim.notify("magenta-interpreter debug: ensure_server_running called", vim.log.levels.INFO)
+    vim.notify("magenta-interpreter debug: auto_start is " .. tostring(M.config.auto_start), vim.log.levels.INFO)
+  end
+  
   if not M.config.auto_start then
     return true
   end
@@ -183,45 +188,108 @@ function M.register_with_magenta()
     return false
   end
   
-  -- Try to register the tool with magenta
-  local registered = false
-  
-  -- We'll try multiple ways to register based on different magenta APIs
-  
-  -- Try to use magenta.register_tool if available
-  if magenta.register_tool then
-    pcall(function()
-      magenta.register_tool("interpreter_shell", {
-        name = "interpreter_shell",
-        description = "Execute shell commands using Open Interpreter and get the results",
-        handler = function(args)
-          local command = args.args or args[1]
-          if not command or command == "" then
-            return { success = false, output = "No command provided" }
-          end
-          return M.execute_command(command)
-        end
-      })
-      registered = true
-    end)
+  if vim.g.magenta_interpreter_debug then
+    vim.notify("Attempting to register with magenta.nvim", vim.log.levels.INFO)
+    vim.notify("magenta module found: " .. tostring(has_magenta), vim.log.levels.INFO)
+    vim.notify("magenta.register_tool exists: " .. tostring(magenta.register_tool ~= nil), vim.log.levels.INFO)
+    if magenta.tools then
+      vim.notify("magenta.tools exists and magenta.tools.register exists: " .. tostring(magenta.tools.register ~= nil), vim.log.levels.INFO)
+    else
+      vim.notify("magenta.tools does not exist", vim.log.levels.INFO)
+    end
   end
   
-  -- Try to use magenta.tools module if available and previous method didn't work
-  if not registered and magenta.tools and magenta.tools.register then
-    pcall(function()
-      magenta.tools.register("interpreter_shell", {
-        name = "interpreter_shell",
-        description = "Execute shell commands using Open Interpreter and get the results",
-        handler = function(args)
-          local command = args.args or args[1]
-          if not command or command == "" then
-            return { success = false, output = "No command provided" }
-          end
-          return M.execute_command(command)
-        end
-      })
-      registered = true
+  -- Define our tool specification
+  local tool_spec = {
+    name = "interpreter_shell",
+    description = "Execute shell commands using Open Interpreter and get the results",
+    handler = function(args)
+      -- Handle both table and string inputs
+      local command = ""
+      if type(args) == "table" then
+        command = args.args or args[1] or ""
+      else
+        command = tostring(args) or ""
+      end
+      
+      if command == "" then
+        return { success = false, output = "No command provided" }
+      end
+      
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("interpreter_shell called with command: " .. command, vim.log.levels.INFO)
+      end
+      
+      return M.execute_command(command)
+    end
+  }
+  
+  -- Try different registration methods
+  local registered = false
+  local err_msg = ""
+  
+  -- Method 1: Direct registration if available
+  if magenta.register_tool then
+    local ok, err = pcall(function()
+      magenta.register_tool("interpreter_shell", tool_spec)
     end)
+    if ok then
+      registered = true
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("Registered tool using magenta.register_tool", vim.log.levels.INFO)
+      end
+    else
+      err_msg = err_msg .. "\nFailed with magenta.register_tool: " .. tostring(err)
+    end
+  end
+  
+  -- Method 2: Using tools module if available
+  if not registered and magenta.tools and magenta.tools.register then
+    local ok, err = pcall(function()
+      magenta.tools.register("interpreter_shell", tool_spec)
+    end)
+    if ok then
+      registered = true
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("Registered tool using magenta.tools.register", vim.log.levels.INFO)
+      end
+    else
+      err_msg = err_msg .. "\nFailed with magenta.tools.register: " .. tostring(err)
+    end
+  end
+  
+  -- Method 3: Last resort - monkey patch the tools table
+  if not registered and magenta.tools and type(magenta.tools) == "table" then
+    local ok, err = pcall(function()
+      if not magenta.tools._tools then
+        magenta.tools._tools = {}
+      end
+      magenta.tools._tools.interpreter_shell = tool_spec
+      if not magenta.tools.execute then
+        magenta.tools.execute = function(tool_name, ...)
+          if magenta.tools._tools[tool_name] and magenta.tools._tools[tool_name].handler then
+            return magenta.tools._tools[tool_name].handler(...)
+          end
+          return { success = false, output = "Tool not found: " .. tool_name }
+        end
+      end
+    end)
+    if ok then
+      registered = true
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("Registered tool by patching magenta.tools", vim.log.levels.INFO)
+      end
+    else
+      err_msg = err_msg .. "\nFailed with monkey patching: " .. tostring(err)
+    end
+  end
+  
+  if not registered then
+    if vim.g.magenta_interpreter_debug then
+      vim.notify("Failed to register tool with magenta: " .. err_msg, vim.log.levels.ERROR)
+    else
+      vim.notify("Failed to register interpreter_shell with magenta. Enable debug for details.", vim.log.levels.ERROR)
+    end
   end
   
   return registered
@@ -242,14 +310,30 @@ end
 
 -- Setup function to initialize the plugin with user configuration
 function M.setup(opts)
+  if vim.g.magenta_interpreter_debug then
+    vim.notify("magenta-interpreter.setup called", vim.log.levels.INFO)
+    if opts then
+      vim.notify("Options received: " .. vim.inspect(opts), vim.log.levels.INFO)
+    else
+      vim.notify("No options received", vim.log.levels.INFO)
+    end
+  end
+  
   -- Merge user configuration with default config
   if opts then
     -- Handle older config format that had interpreter_shell nested
     if opts.interpreter_shell then
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("Converting from legacy interpreter_shell config format", vim.log.levels.INFO)
+      end
       opts = opts.interpreter_shell
     end
     
     M.config = vim.tbl_deep_extend("force", default_config, opts)
+  end
+  
+  if vim.g.magenta_interpreter_debug then
+    vim.notify("Effective configuration: " .. vim.inspect(M.config), vim.log.levels.INFO)
   end
   
   -- Initialize modules
@@ -279,17 +363,50 @@ function M.setup(opts)
     complete = "shellcmd"
   })
   
-  -- Register with Magenta if available
-  -- We'll do this on VimEnter to ensure Magenta is fully loaded
+  -- Try to register with Magenta directly (for cases when Magenta is already loaded)
+  local immediate_success = M.register_with_magenta()
+  if immediate_success and vim.g.magenta_interpreter_debug then
+    vim.notify("Immediate registration with Magenta successful", vim.log.levels.INFO)
+  end
+  
+  -- Also register on VimEnter for cases when Magenta loads later
   vim.api.nvim_create_autocmd("VimEnter", {
     callback = function()
-      -- Delay the registration slightly to ensure Magenta is fully initialized
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("VimEnter event triggered for magenta-interpreter", vim.log.levels.INFO)
+      end
+      
+      -- Delay the registration to ensure Magenta is fully initialized
       vim.defer_fn(function()
-        local success = M.register_with_magenta()
-        if not success then
-          vim.notify("Failed to register interpreter_shell with Magenta", vim.log.levels.WARN)
-        else
-          vim.notify("interpreter_shell tool registered with Magenta", vim.log.levels.INFO)
+        -- Avoid duplicate registration if already successful
+        if not immediate_success then
+          local success = M.register_with_magenta()
+          if success then
+            if vim.g.magenta_interpreter_debug then
+              vim.notify("Delayed registration with Magenta successful", vim.log.levels.INFO)
+            else
+              vim.notify("interpreter_shell tool registered with Magenta", vim.log.levels.INFO)
+            end
+          else
+            vim.notify("Failed to register interpreter_shell with Magenta. Check if magenta.nvim is properly loaded.", vim.log.levels.WARN)
+          end
+        end
+      end, 1000) -- Increased delay to 1 second for better reliability
+    end,
+    once = true
+  })
+  
+  -- Also try after plugins are loaded (for lazy loading cases)
+  vim.api.nvim_create_autocmd("User", {
+    pattern = {"LazyDone", "PackerComplete", "VeryLazy"},
+    callback = function()
+      if vim.g.magenta_interpreter_debug then
+        vim.notify("Plugin manager finished loading, attempting registration", vim.log.levels.INFO)
+      end
+      
+      vim.defer_fn(function()
+        if not immediate_success then
+          M.register_with_magenta()
         end
       end, 500)
     end,
